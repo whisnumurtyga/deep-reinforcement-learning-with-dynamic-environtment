@@ -18,10 +18,18 @@ HEIGHT = 1080
 
 # CAR_SIZE_X = 60  #ini nge set ukuran mobilnya
 # CAR_SIZE_Y = 60
-CAR_SIZE_X = 15  #ini nge set ukuran mobilnya
-CAR_SIZE_Y = 15
+CAR_SIZE_X = 18  #ini nge set ukuran mobilnya
+CAR_SIZE_Y = 18
+
+X_FINISH_LINE = 835
+Y_FINISH_LINE = 462
+
+CAR_AVG_SPEED = 10
 
 BORDER_COLOR = (255, 255, 255, 255) # ini buat batas jalan atau border nya
+
+MAX_TIME = 100
+
 
 current_generation = 0 #inisialisai generation
 
@@ -55,9 +63,20 @@ class Car:
         self.distance = 0 # Jarak yang ditempuh mobilnya,jaraknya bertambah seiring jalannya waktu
         self.time = 0 # Waktu yang berlalu dari dimulainya simulasi
 
+
+    def finish(self):
+        # Logika yang dijalankan saat mobil melewati garis finish
+        self.alive = False
+        print("Mobil telah melewati garis finish!")
+        print(f"Time: {self.time}\t-\tDistance: {self.distance}")
+    
+    # def draw(self, screen):
+    #     screen.blit(self.rotated_sprite, self.position) 
+    #     self.draw_radar(screen) #OPTIONAL FOR SENSORS
     def draw(self, screen):
-        screen.blit(self.rotated_sprite, self.position) 
-        self.draw_radar(screen) #OPTIONAL FOR SENSORS
+        rotated_sprite, new_rect = self.rotate_center(self.sprite, self.angle)
+        screen.blit(rotated_sprite, self.position)
+        self.draw_radar(screen)  # OPTIONAL FOR SENSORS
 
     # Fungsi draw intinya buat nge gambar mobilnya yang udah di rotate jadi lurus
 
@@ -107,7 +126,8 @@ class Car:
         # Set The Speed To 20 For The First Time
         # Only When Having 4 Output Nodes With Speed Up and Down
         if not self.speed_set:
-            self.speed = 20
+            self.speed = CAR_AVG_SPEED
+            # self.speed = 20
             self.speed_set = True
 
         # line 105 - 107 di cek kecepatannya udah diatur self.speed_set
@@ -118,7 +138,8 @@ class Car:
         # Don't Let The Car Go Closer Than 20px To The Edge
         self.rotated_sprite = self.rotate_center(self.sprite, self.angle) # gambar mobil yang udah dirotasi dihitung untuk melakukan rotasi terhadap gambar mobil berdasarkan sudut (self.angle)
         self.position[0] += math.cos(math.radians(360 - self.angle)) * self.speed
-        self.position[0] = max(self.position[0], 20)
+        # self.position[0] = max(self.position[0], 20)
+        self.position[0] = max(self.position[0], CAR_AVG_SPEED)
         self.position[0] = min(self.position[0], WIDTH - 120)
 
         #line 116 - 118 update posisi mobil pada sumbu X (kanan) berdasarakn arah hadap mobil (self.angle) dan kecepatan (self.speed)
@@ -130,7 +151,7 @@ class Car:
         
         # Same For Y-Position
         self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
-        self.position[1] = max(self.position[1], 20)
+        self.position[1] = max(self.position[1], CAR_AVG_SPEED)
         self.position[1] = min(self.position[1], WIDTH - 120)
         # prinsip nya sama kayak yang X,cuman posisinya ke Y (kiri)
 
@@ -151,6 +172,9 @@ class Car:
         # Manggil metthod check_collision buat meriksa mobilnya bersentuhan sama batas ngga.
         # Terus di clear list radar (self.radars) buat persiapan pengukuran radar selanjutnya
         self.check_collision(game_map)
+        if game_map.get_at((int(self.center[0]), int(self.center[1]))) == (255, 0, 0, 255):
+            self.finish()
+                        
         self.radars.clear()
 
         
@@ -168,7 +192,6 @@ class Car:
             return_values[i] = int(radar[1] / 30)
             # nilai jarak dari sensor radar dibagi degan 30,dan hasilnya diubah menjadi integer
             # dibagi 30 kayaknya buat ngubah nilai jarak jadi format yang lebih kecil dan sesuai kalo giunakan sebagai masukan jaringan saraf
-
         return return_values
 
     # get_data intinya buat ngumpulin data terus dimasukin ke dalam jaringan saraf.
@@ -181,20 +204,46 @@ class Car:
     
     # is_alive buat nentuin mobilnya hidup atau crash
 
+    # def get_reward(self):
+    #     # Calculate Reward (Maybe Change?)
+    #     # return self.distance / 50.0
+    #     return self.distance / (CAR_SIZE_X / 2)
+
     def get_reward(self):
-        # Calculate Reward (Maybe Change?)
-        # return self.distance / 50.0
-        return self.distance / (CAR_SIZE_X / 2)
+        # Koordinat garis finish
+        finish_line_x = X_FINISH_LINE  # Ganti X_FINISH_LINE dengan koordinat X dari garis finish
+        finish_line_y = Y_FINISH_LINE  # Ganti Y_FINISH_LINE dengan koordinat Y dari garis finish
+
+        # Hitung jarak dari mobil ke garis finish
+        distance_to_finish = ((self.position[0] - finish_line_x) ** 2 + (self.position[1] - finish_line_y) ** 2) ** 0.5
+
+        # Normalisasi jarak agar mendekati nilai 1 saat mobil semakin mendekati garis finish
+        max_distance = ((WIDTH - finish_line_x) ** 2 + (HEIGHT - finish_line_y) ** 2) ** 0.5
+        normalized_distance = 1 - (distance_to_finish / max_distance)
+
+        # Normalisasi waktu, misalnya dengan membagi waktu yang berlalu dengan batas waktu maksimal
+        normalized_time = 1 - (self.time / MAX_TIME)
+
+        # Menentukan bobot untuk kontribusi waktu dan jarak terhadap reward
+        weight_distance = 0.5  # Bobot jarak
+        weight_time = 0.5  # Bobot waktu
+
+        # Menggabungkan kontribusi waktu dan jarak untuk mendapatkan reward akhir
+        final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
+        
+        return final_reward
+
+
 
     # def rotate_center(self, image, angle):
-        # # Rotate The Rectangle
-        # rectangle = image.get_rect() # Membuat objek rectangle yang merupakan objek rect (persegi panjang) dari gambar (image). Rect ini digunakan untuk menghitung pusat gambar sebelum rotasi.
-        # rotated_image = pygame.transform.rotate(image, angle) # buat muter gambar sebesar sudut yang ditentui samma parameter angle
-        # rotated_rectangle = rectangle.copy() # copy objek rectangle,buat simpen informasi persegii panjang (image) sebelum di rotate
-        # rotated_rectangle.center = rotated_image.get_rect().center # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
-        # rotated_image = rotated_image.subsurface(rotated_rectangle).copy() # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
-        # return rotated_image
-
+    #     # Rotate The Rectangle
+    #     rectangle = image.get_rect() # Membuat objek rectangle yang merupakan objek rect (persegi panjang) dari gambar (image). Rect ini digunakan untuk menghitung pusat gambar sebelum rotasi.
+    #     rotated_image = pygame.transform.rotate(image, angle) # buat muter gambar sebesar sudut yang ditentui samma parameter angle
+    #     rotated_rectangle = rectangle.copy() # copy objek rectangle,buat simpen informasi persegii panjang (image) sebelum di rotate
+    #     rotated_rectangle.center = rotated_image.get_rect().center # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
+    #     rotated_image = rotated_image.subsurface(rotated_rectangle).copy() # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
+    #     return rotated_image
+    
     def rotate_center(self, image, angle):
         # Rotate The Image
         rotated_image = pygame.transform.rotate(image, angle)
@@ -229,7 +278,8 @@ def run_simulation(genomes, config):
     clock = pygame.time.Clock() # buat mengatur kecepatan frame (60 FPS)
     generation_font = pygame.font.SysFont("Arial", 30) # gaya tulisan nampilin informasi generasi 
     alive_font = pygame.font.SysFont("Arial", 20) # gaya tulisan nampilin informasi alive
-    game_map = pygame.image.load('assets/Rute3.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
+    # game_map = pygame.image.load('assets/Rute3.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
+    game_map = pygame.image.load('assets/Rute_cabang.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
     # Convert Speeds Up A Lot
 
     global current_generation
@@ -248,10 +298,23 @@ def run_simulation(genomes, config):
         for i, car in enumerate(cars): # terasi melalui setiap mobil dalam list cars menggunakan fungsi enumerate untuk mendapatkan indeks dan objek mobil.
             output = nets[i].activate(car.get_data()) # Mengaktifkan jaringan saraf mobil ke-i dengan memberikan data dari mobil tersebut sebagai input. Output dari jaringan saraf merupakan nilai aktivasi untuk setiap node output
             choice = output.index(max(output)) # Memilih tindakan (choice) berdasarkan indeks node output dengan nilai aktivasi maksimum
-            # if choice == 0:
-            #     car.angle += 10 # Left
-            # elif choice == 1:
-            #     car.angle -= 10 # Right
+            # print(nets[i]) #radars
+            # print(car.get_data()) #radars
+            # print(output) #radars setelah aktivasi
+            # print(choice) #pilihan adalah radar dengan distance terkecil
+            # break
+            if choice == 0:
+                car.speed /= 2
+                car.speed /= 2
+                car.angle += 17 # Left
+                car.speed *= 2
+                car.speed *= 2
+            elif choice == 1:
+                car.speed /= 2
+                car.speed /= 2
+                car.angle -= 17 # Right
+                car.speed *= 2
+                car.speed *= 2
             # elif choice == 2:
             #     if(car.speed - 2 >= 12):
             #         car.speed -= 2 # Slow Down
@@ -263,7 +326,6 @@ def run_simulation(genomes, config):
             #         car.speed -= 2 # Slow Down
             # else:
             #     car.speed += 2 # Speed Up
-
         #  setiap mobil dalam simulasi mengambil keputusan berdasarkan output dari jaringan sarafnya.
         
         # Check If Car Is Still Alive
@@ -295,12 +357,12 @@ def run_simulation(genomes, config):
         # Display Info
         text = generation_font.render("Generation: " + str(current_generation), True, (0,0,0))
         text_rect = text.get_rect()
-        text_rect.center = (900, 450)
+        text_rect.center = (245, 144)
         screen.blit(text, text_rect)
 
         text = alive_font.render("Still Alive: " + str(still_alive), True, (0, 0, 0))
         text_rect = text.get_rect()
-        text_rect.center = (900, 490)
+        text_rect.center = (245, 194)
         screen.blit(text, text_rect)
 
         # ini buat nampilin informasi mobil yang hidup ada berapa aja
