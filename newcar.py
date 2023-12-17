@@ -35,7 +35,7 @@ class Car:
         # terus rotated_sprite itu buat nge rotate gambarnya sesuai sama arah pergerakkan mobilnya
         
     
-        self.position = [946, 170] # Titik awal mobil (start line nya)
+        self.position = [1070, 191] # Titik awal mobil (start line nya)
         self.angle = 270 #ini buat sudut mobilya di set 0 supaya dia lurus (arah hadap mobilnya)
         self.speed = 0 #kecepatan awal mobil (awalan di set diem)
 
@@ -109,22 +109,15 @@ class Car:
         # Set The Speed To 20 For The First Time
         # Only When Having 4 Output Nodes With Speed Up and Down
         if not self.speed_set:
-            self.speed = 20
+            self.speed =25
             self.speed_set = True
-
-        # line 105 - 107 di cek kecepatannya udah diatur self.speed_set
-        # jika belum kecepatannya diatur jadi 20 dan self.speed_test diatur menjadi True.
-        # Kecepatan default = 0 hanya diatur sekali,selanjutnya konstan 20 
-
+        
         # Get Rotated Sprite And Move Into The Right X-Direction
         # Don't Let The Car Go Closer Than 20px To The Edge
-        self.rotated_sprite = self.rotate_center(self.sprite, self.angle) # gambar mobil yang udah dirotasi dihitung untuk melakukan rotasi terhadap gambar mobil berdasarkan sudut (self.angle)
+        self.rotated_sprite = self.rotate_center(self.sprite, self.angle)
         self.position[0] += math.cos(math.radians(360 - self.angle)) * self.speed
         self.position[0] = max(self.position[0], 20)
         self.position[0] = min(self.position[0], WIDTH - 120)
-
-        #line 116 - 118 update posisi mobil pada sumbu X (kanan) berdasarakn arah hadap mobil (self.angle) dan kecepatan (self.speed)
-        # posisinya dibatasi supaya ngga mendekati border,dengan nilai minimum 20 piksel dna nilai maksimum (WIDTH - 120)
 
         # Ningkatin jarak (self.distance) dan waktu (self.time) berdasarkan kecepatan mobil
         self.distance += self.speed
@@ -134,34 +127,40 @@ class Car:
         self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
         self.position[1] = max(self.position[1], 20)
         self.position[1] = min(self.position[1], WIDTH - 120)
-        # prinsip nya sama kayak yang X,cuman posisinya ke Y (kiri)
 
         # Hitung kembali pusat mobil (self.center) berdasarkan posisi mobil yang udah diupdate
         self.center = [int(self.position[0]) + CAR_SIZE_X / 2, int(self.position[1]) + CAR_SIZE_Y / 2]
 
-        
-        length = 0.5 * CAR_SIZE_X # hitung panjang dari pusat mobil ke tiap salah satu sudut (setengah karna bentuknya persegi,jarak dari pusat ke sudut dibikin setengah)
+        # Calculate the coordinates of the car's corners
+        length = 0.5 * CAR_SIZE_X
         left_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 30))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 30))) * length]
         right_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 150))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 150))) * length]
         left_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 210))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 210))) * length]
         right_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 330))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 330))) * length]
         self.corners = [left_top, right_top, left_bottom, right_bottom]
-        
-        # Line 138 - 142 hitung koordinat keempat sudut 
-        # contoh : left_top hitungannya dibagi jadi 2 cos (X) sama sin (Y),terus 360 (lingkaran penuh) dikurnangin self.angel + 30 jadi diputer 330 derajat searah jarum jam )
 
-        # Manggil metthod check_collision buat meriksa mobilnya bersentuhan sama batas ngga.
-        # Terus di clear list radar (self.radars) buat persiapan pengukuran radar selanjutnya
+        # Check for collision and clear the radar list for the next measurements
         self.check_collision(game_map)
+        current_color = game_map.get_at((int(self.center[0]), int(self.center[1])))
+        target_color = (255, 230, 0, 255)
+        tolerance = 10  # Adjust as needed
+
+        if all(abs(a - b) <= tolerance for a, b in zip(current_color, target_color)):
+            # Logic to handle the detection of the yellow color
+            self.angle += 180  # Rotate the car by 180 degrees (adjust as needed)
+            self.speed = 3   # Set a new speed (adjust as needed)
+            print("Yellow color detected -------")
+            self.alive = False
+
         if game_map.get_at((int(self.center[0]), int(self.center[1]))) == (255, 0, 0, 255):
             self.finish()
 
         self.radars.clear()
 
-        
         for d in range(-90, 120, 45):
             self.check_radar(d, game_map)
-        # Loop di atas menciptakan sensor radar dengan arah tertentu sebanyak lima kali, masing-masing pada sudut -90, -45, 0, 45, dan 90 derajat. 
+
+            # Loop di atas menciptakan sensor radar dengan arah tertentu sebanyak lima kali, masing-masing pada sudut -90, -45, 0, 45, dan 90 derajat. 
         # Jadi, sensor radarnya bakal diarahin ke lima arah yang berbeda di sekitar mobil dengan interval sudut 45 derajat.
         # 120 itu kayak batas nya gitu 
 
@@ -238,7 +237,7 @@ def run_simulation(genomes, config):
     clock = pygame.time.Clock() # buat mengatur kecepatan frame (60 FPS)
     generation_font = pygame.font.SysFont("Arial", 30) # gaya tulisan nampilin informasi generasi 
     alive_font = pygame.font.SysFont("Arial", 20) # gaya tulisan nampilin informasi alive
-    game_map = pygame.image.load('Rute_cabang.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
+    game_map = pygame.image.load('Rute_obstacle.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
     # Convert Speeds Up A Lot
 
     global current_generation
