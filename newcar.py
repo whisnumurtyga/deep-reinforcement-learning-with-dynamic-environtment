@@ -30,6 +30,7 @@ BORDER_COLOR = (255, 255, 255, 255) # ini buat batas jalan atau border nya
 
 MAX_TIME = 100
 
+PROB_EXPLORE = 0.15
 
 current_generation = 0 #inisialisai generation
 
@@ -255,6 +256,12 @@ class Car:
     
     # rotate_center intinya buat mastiin ketika gambar nya diputar pusat rotasinya tetep dipertahanin
 
+def second_largest_index(arr):
+    max_val = max(arr)
+    arr.remove(max_val)
+    second_max = max(arr)
+    return arr.index(second_max)
+
 def run_simulation(genomes, config):
     
     # Empty Collections For Nets and Cars
@@ -303,23 +310,33 @@ def run_simulation(genomes, config):
             # print(output) #radars setelah aktivasi
             # print(choice) #pilihan adalah radar dengan distance terkecil
             # break
+            # !! Explorasi
+            if random.random() < PROB_EXPLORE:
+                choice = second_largest_index(output)
             if choice == 0:
                 car.speed /= 2
                 car.speed /= 2
-                car.angle += 17 # Left
+                car.angle -= 17 # Left
                 car.speed *= 2
                 car.speed *= 2
+                print(f"choice: {choice}")
             elif choice == 1:
                 car.speed /= 2
                 car.speed /= 2
-                car.angle -= 17 # Right
+                car.angle += 17 # Right
                 car.speed *= 2
                 car.speed *= 2
-            # elif choice == 2:
-            #     if(car.speed - 2 >= 12):
-            #         car.speed -= 2 # Slow Down
-            # else:
-            #     car.speed += 2 # Speed Up
+                print(f"choice: {choice}")
+                
+            elif choice == 2:
+                # car.angle += 17 # Left
+                print(f"choice: {choice}")
+                # if(car.speed - 2 >= 12):
+                # car.speed -= 2 # Slow Down
+            else:
+                # car.angle -= 17 # Left
+                print(f"choice: {choice}")
+                # car.speed += 2 # Speed Up
 
             # if choice == 2:
             #     if(car.speed - 2 >= 12):
