@@ -8,6 +8,7 @@ import os
 
 import neat
 import pygame
+import pandas as pd
 
 # Constants
 # WIDTH = 1600
@@ -18,8 +19,8 @@ HEIGHT = 1080
 
 # CAR_SIZE_X = 60  #ini nge set ukuran mobilnya
 # CAR_SIZE_Y = 60
-CAR_SIZE_X = 18  #ini nge set ukuran mobilnya
-CAR_SIZE_Y = 18
+CAR_SIZE_X = 14  #ini nge set ukuran mobilnya
+CAR_SIZE_Y = 35
 
 X_FINISH_LINE = 835
 Y_FINISH_LINE = 462
@@ -36,7 +37,10 @@ current_generation = 0 #inisialisai generation
 
 class Car:
 
-    def __init__(self):
+    def __init__(self, car_id, start_position):
+        self.car_id = car_id  # ID mobil
+        self.start_position = start_position
+        self.end_position = None  # Posisi akhir mobil
         # Load Car Sprite and Rotate
         self.sprite = pygame.image.load('assets/car.png').convert() 
         self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE_X, CAR_SIZE_Y)) 
@@ -68,6 +72,7 @@ class Car:
     def finish(self):
         # Logika yang dijalankan saat mobil melewati garis finish
         self.alive = False
+        self.end_position = self.position[:]  # Simpan posisi akhir mobil saat melewati garis finish
         print("Mobil telah melewati garis finish!")
         print(f"Time: {self.time}\t-\tDistance: {self.distance}")
     
@@ -226,8 +231,8 @@ class Car:
         normalized_time = 1 - (self.time / MAX_TIME)
 
         # Menentukan bobot untuk kontribusi waktu dan jarak terhadap reward
-        weight_distance = 0.5  # Bobot jarak
-        weight_time = 0.5  # Bobot waktu
+        weight_distance = 0.7  # Bobot jarak
+        weight_time = 0.3  # Bobot waktu
 
         # Menggabungkan kontribusi waktu dan jarak untuk mendapatkan reward akhir
         final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
@@ -262,8 +267,8 @@ def second_largest_index(arr):
     second_max = max(arr)
     return arr.index(second_max)
 
+simulation_data = []
 def run_simulation(genomes, config):
-    
     # Empty Collections For Nets and Cars
     nets = [] # nets itu sebuah list yang menyimpan objek jaringan saraf yang digunakan untuk mengendalikan perilaku mobil dalam simulasi. 
     cars = []
@@ -278,7 +283,7 @@ def run_simulation(genomes, config):
         nets.append(net) # Menambahkan jaringan saraf yang baru dibuat ke dalam list nets. List ini akan menyimpan semua jaringan saraf yang digunakan untuk mengontrol mobil dalam simulasi.
         g.fitness = 0 # Mengatur nilai fitness genom saat ini menjadi 0. Nilai fitness ini akan diakumulasikan selama simulasi berjalan, tergantung seberapa baik mobil berkinerja.
 
-        cars.append(Car()) # Menambahkan objek mobil baru (Car()) ke dalam list cars. Setiap mobil dalam simulasi akan diwakili oleh satu objek mobil.
+        cars.append(Car(i, [952, 102])) # Menambahkan objek mobil baru (Car()) ke dalam list cars. Setiap mobil dalam simulasi akan diwakili oleh satu objek mobil.
 
     # Clock Settings
     # Font Settings & Loading Map
@@ -313,29 +318,30 @@ def run_simulation(genomes, config):
             # !! Explorasi
             if random.random() < PROB_EXPLORE:
                 choice = second_largest_index(output)
+                
             if choice == 0:
                 car.speed /= 2
                 car.speed /= 2
                 car.angle -= 17 # Left
                 car.speed *= 2
                 car.speed *= 2
-                print(f"choice: {choice}")
+                # print(f"choice: {choice}")
             elif choice == 1:
                 car.speed /= 2
                 car.speed /= 2
                 car.angle += 17 # Right
                 car.speed *= 2
                 car.speed *= 2
-                print(f"choice: {choice}")
+                # print(f"choice: {choice}")
                 
-            elif choice == 2:
-                # car.angle += 17 # Left
-                print(f"choice: {choice}")
+            # elif choice == 2:
+            #     car.angle += 17 # Left
+                # print(f"choice: {choice}")
                 # if(car.speed - 2 >= 12):
                 # car.speed -= 2 # Slow Down
-            else:
-                # car.angle -= 17 # Left
-                print(f"choice: {choice}")
+            # else:
+            #     car.angle -= 17 # Left
+                # print(f"choice: {choice}")
                 # car.speed += 2 # Speed Up
 
             # if choice == 2:
@@ -343,6 +349,21 @@ def run_simulation(genomes, config):
             #         car.speed -= 2 # Slow Down
             # else:
             #     car.speed += 2 # Speed Up
+                    
+            if not car.is_alive:
+                # Menyimpan data ke dalam list
+                simulation_data.append({
+                'generasi': current_generation,
+                'car_id': car.car_id,
+                'start_position_x': car.start_position[0],
+                'start_position_y': car.start_position[1],
+                'end_position_x': car.end_position[0] if car.end_position else None,
+                'end_position_y': car.end_position[1] if car.end_position else None,
+                'is_alive': car.is_alive,
+                'total_distance': car.total_distance,
+                'total_time': car.total_time
+            })
+                
         #  setiap mobil dalam simulasi mengambil keputusan berdasarkan output dari jaringan sarafnya.
         
         # Check If Car Is Still Alive
@@ -386,6 +407,8 @@ def run_simulation(genomes, config):
 
         pygame.display.flip() # Fungsi ini digunakan untuk memperbarui tampilan pada layar. Semua perubahan yang telah dilakukan dalam satu frame diaplikasikan dan ditampilkan pada layar. Ini termasuk pergerakan objek, pembaruan skor
         clock.tick(60) # 60 FPS
+            
+
 
 if __name__ == "__main__":
     
