@@ -16,9 +16,9 @@ WIDTH = 1920
 HEIGHT = 1080
 
 # => Car
-CAR_SIZE = (14, 35)
 CAR_SIZE_X = 14
 CAR_SIZE_Y = 35
+CAR_SIZE = (CAR_SIZE_X, CAR_SIZE_Y)
 CAR_SPEED = 10
 ANGLE = -90
 
@@ -26,18 +26,18 @@ ANGLE = -90
 START_POS = [952, 102]
 
 # => Finish Line
-FINISH_POS = [835, 462]
 FINISH_COLOR = (255, 0, 0, 255)
 X_FINISH_LINE = 835
 Y_FINISH_LINE = 462
+FINISH_POS = [X_FINISH_LINE, Y_FINISH_LINE]
 
 # => Utility
 MAX_TIME = 100
 PROB_EXPLORE = 0.15
 BORDER_COLOR = (255, 255, 255, 255)
-WEIGHT_TIME = 0.7
-WEIGHT_DISTANCE = 0.3
-LIMIT_GENERATION = 50
+WEIGHT_TIME = 0.5
+WEIGHT_DISTANCE = 0.5
+LIMIT_GENERATION = 1000
 # -=== END: Config ===-
 
 
@@ -56,7 +56,7 @@ class Car:
         
         self.position = START_POS
         self.angle = ANGLE
-        self.speed = CAR_SPEED
+        self.speed = 0
         
         self.center = [self.position[0] + CAR_SIZE_X / 2, self.position[1] + CAR_SIZE_Y / 2]
         self.radars = []
@@ -76,7 +76,7 @@ class Car:
 
     # => Draw Function
     def draw(self, screen):
-        rotated_sprite,new_rect = self.rotate_center(self.sprite, self.angle)
+        rotated_sprite, new_rect = self.rotate_center(self.sprite, self.angle)
         screen.blit(rotated_sprite, self.position)
         self.draw_radar(screen)
     
@@ -93,7 +93,9 @@ class Car:
         for point in self.corners:
             if game_map.get_at( (int(point[0]), int(point[1])) ) == BORDER_COLOR: 
                 self.alive = False 
+                self.end_position = self.position[:]
                 break
+            print(point)
             
     # => Fungsi Check Radar 
     def check_radar(self, degree, game_map):
@@ -125,12 +127,13 @@ class Car:
         self.time += 1
         
         self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
-        self.position[1] = max(self.position[1], CAR_AVG_SPEED)
+        self.position[1] = max(self.position[1], CAR_SPEED)
         self.position[1] = min(self.position[1], WIDTH - 120)
 
         self.center = [int(self.position[0]) + CAR_SIZE_X / 2, int(self.position[1]) + CAR_SIZE_Y / 2]
         
         length = 0.5 * CAR_SIZE_X 
+        
         left_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 30))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 30))) * length]
         right_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 150))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 150))) * length]
         left_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 210))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 210))) * length]
@@ -146,6 +149,11 @@ class Car:
         for d in range(-90, 120, 45):
             self.check_radar(d, game_map)
     
+
+    def is_alive(self):
+        # Basic Alive Function
+        return self.alive
+
 
     # => Fungsi mengambil data radar
     def get_data(self):
@@ -179,9 +187,9 @@ class Car:
 
     # 
     def rotate_center(self, image, angle):
-        rotated_image = pygame.transform.rotatee(image, angle)
+        rotated_image = pygame.transform.rotate(image, angle)
         new_rect = rotated_image.get_rect(center=image.get_rect().center)
-        rotated_image = pygame.transform.scale(rotated_image, (CAR_SIZE_X, CAR_SIZE_Y))
+        rotated_image = pygame.transform.scale(rotated_image, CAR_SIZE)
         return rotated_image, new_rect
     
 # -=== END: Car Class ===-
@@ -209,7 +217,7 @@ def run_simulation(genomes, config):
         nets.append(net)
         g.fitness = 0
 
-        cars.append(Car(i, START_POS))
+        cars.append(Car(i))
 
         clock = pygame.time.Clock()
         generation_font = pygame.font.SysFont("Arial", 30) 
@@ -220,7 +228,7 @@ def run_simulation(genomes, config):
         current_generation += 1
 
         counter = 0
-        while current_generation <= LIMIT_GENERATION:
+        while True:
         
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -233,10 +241,18 @@ def run_simulation(genomes, config):
                 if random.random() < PROB_EXPLORE:
                     choice = second_largest_index(output)
                 
-                if choice == 0:
-                    car.angle -= 17
+                if choice == 0: 
+                    car.speed /= 2
+                    car.speed /= 2
+                    car.angle -= 17 # Left
+                    car.speed *= 2
+                    car.speed *= 2
                 elif choice == 1:
-                    car.angle += 17
+                    car.speed /= 2
+                    car.speed /= 2
+                    car.angle += 17 # Right
+                    car.speed *= 2
+                    car.speed *= 2
             
             still_alive = 0
             for i, car in enumerate(cars):
@@ -250,17 +266,22 @@ def run_simulation(genomes, config):
                         'car_id': car.car_id, 
                         'start_position_x': START_POS[0],
                         'start_position_y': START_POS[1],
-                        'end_position_x': car.end_position[0],
-                        'end_position_y': car.end_position[1],
-                        'is_alive': car.is_alive,
-                        'total_distance': car.total_distance,
-                        'total_time': car.total_time,
+                        'end_position_x': car.end_position[0] if car.end_position is not None else None,
+                        'end_position_y': car.end_position[1] if car.end_position is not None else None,
+                        'is_alive': car.is_alive(),
+                        'total_distance': car.distance,
+                        'total_time': car.time,
                         'reward': car.get_reward(),
+
                     })
 
             if still_alive == 0:
                 break
 
+            counter += 1
+            if counter == 30 * 40: 
+                break
+    
             screen.blit(game_map, (0, 0))
             for car in cars:
                 if car.is_alive():
@@ -278,6 +299,7 @@ def run_simulation(genomes, config):
 
             pygame.display.flip()
             clock.tick(60)
+
 # -=== END: Function ===-
 
 
@@ -290,6 +312,7 @@ if __name__ == "__main__":
                                 neat.DefaultReproduction,
                                 neat.DefaultSpeciesSet,
                                 neat.DefaultStagnation,
+                                config_path
                                 )
     
     population = neat.Population(config)
@@ -299,4 +322,7 @@ if __name__ == "__main__":
     population.add_reporter(stats)
 
     population.run(run_simulation, LIMIT_GENERATION)
+
+    df = pd.DataFrame(simulation_data)
+    df.to_csv('simulation_data.csv', index=False)
 # -=== END: Main ===-

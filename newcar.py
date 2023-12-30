@@ -102,6 +102,7 @@ class Car:
             # Mobilnya diasumsikan persegi jadi cuman ada 4 titik 
 
             if game_map.get_at((int(point[0]), int(point[1]))) == BORDER_COLOR:
+                print(point)
                 self.alive = False
                 break
             # Mengecek kalo ada warna dari posisi sudut mobil  sama dengan BORDER_COLOR,maka mobilnya mati (self.alive = false),terus di break
