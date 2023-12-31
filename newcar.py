@@ -8,35 +8,51 @@ import os
 
 import neat
 import pygame
+import pandas as pd
 
-# Constants
-# WIDTH = 1600
-# HEIGHT = 880
 
+# => Map 
 WIDTH = 1920 #lebar sama ukuran layar 
 HEIGHT = 1080
 
-CAR_SIZE_X = 15 #ini nge set ukuran mobilnya
-CAR_SIZE_Y = 15
+# => Car
+CAR_SIZE_X = 14  
+CAR_SIZE_Y = 35
+CAR_SIZE = (CAR_SIZE_X,CAR_SIZE_Y)
+CAR_SPEED = 10
+ANGLE = -180
 
-BORDER_COLOR = (255, 255, 255, 255) # ini buat batas jalan atau border nya
+# => Start position
+START_POS = [1656, 665]
+
+# => Finis line
+X_FINISH_LINE = 37
+Y_FINISH_LINE = 862
+FINISH_POS = [X_FINISH_LINE,Y_FINISH_LINE]
+FINISH_COLOR = (255, 0, 0, 255)
+
+BORDER_COLOR = (255, 255, 255, 255)
+
+MAX_TIME = 100
+
+PROB_EXPLORE = 0.15
 
 current_generation = 0 #inisialisai generation
 
 class Car:
 
-    def __init__(self):
-        # Load Car Sprite and Rotate
-        self.sprite = pygame.image.load('car.png').convert() 
+    def __init__(self, car_id, start_position):
+        self.car_id = car_id 
+        self.start_position = start_position
+        self.end_position = None  
+   
+        self.sprite = pygame.image.load('./assets/car.png').convert() 
         self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE_X, CAR_SIZE_Y)) 
         self.rotated_sprite = self.sprite 
 
-        #Line 30 - 32 itu dia ngambil gambar mobilnya terus di scale sesuai CAR_SIZE_X sama Y
-        # terus rotated_sprite itu buat nge rotate gambarnya sesuai sama arah pergerakkan mobilnya
-        
-    
-        self.position = [1070, 191] # Titik awal mobil (start line nya)
-        self.angle = 270 #ini buat sudut mobilya di set 0 supaya dia lurus (arah hadap mobilnya)
+        self.position = [1656, 665] # Titik awal mobil (start line nya)
+        # self.angle = 0 #ini buat sudut mobilya di set 0 supaya dia lurus (arah hadap mobilnya)
+        self.angle = -180 #ini buat sudut mobilya di set 0 supaya dia lurus (arah hadap mobilnya)
         self.speed = 0 #kecepatan awal mobil (awalan di set diem)
 
         self.speed_set = False # flag atau penanda buat ngeset kecepatan awalnya = 0,selanjutnya diubah jadi true terus di ganti kecepatan nya jadi 20
@@ -50,16 +66,22 @@ class Car:
 
         self.distance = 0 # Jarak yang ditempuh mobilnya,jaraknya bertambah seiring jalannya waktu
         self.time = 0 # Waktu yang berlalu dari dimulainya simulasi
+
+
     def finish(self):
         # Logika yang dijalankan saat mobil melewati garis finish
         self.alive = False
+        self.end_position = self.position[:]  # Simpan posisi akhir mobil saat melewati garis finish
         print("Mobil telah melewati garis finish!")
-        
+        print(f"Time: {self.time}\t-\tDistance: {self.distance}")
+    
+    # def draw(self, screen):
+    #     screen.blit(self.rotated_sprite, self.position) 
+    #     self.draw_radar(screen) #OPTIONAL FOR SENSORS
     def draw(self, screen):
         rotated_sprite, new_rect = self.rotate_center(self.sprite, self.angle)
         screen.blit(rotated_sprite, self.position)
         self.draw_radar(screen)  # OPTIONAL FOR SENSORS
-
 
     # Fungsi draw intinya buat nge gambar mobilnya yang udah di rotate jadi lurus
 
@@ -79,6 +101,7 @@ class Car:
             # Mobilnya diasumsikan persegi jadi cuman ada 4 titik 
 
             if game_map.get_at((int(point[0]), int(point[1]))) == BORDER_COLOR:
+                print(point)
                 self.alive = False
                 break
             # Mengecek kalo ada warna dari posisi sudut mobil  sama dengan BORDER_COLOR,maka mobilnya mati (self.alive = false),terus di break
@@ -109,58 +132,62 @@ class Car:
         # Set The Speed To 20 For The First Time
         # Only When Having 4 Output Nodes With Speed Up and Down
         if not self.speed_set:
-            self.speed =25
+            self.speed = CAR_SPEED
+            # self.speed = 20
             self.speed_set = True
-        
+
+        # line 105 - 107 di cek kecepatannya udah diatur self.speed_set
+        # jika belum kecepatannya diatur jadi 20 dan self.speed_test diatur menjadi True.
+        # Kecepatan default = 0 hanya diatur sekali,selanjutnya konstan 20 
+
         # Get Rotated Sprite And Move Into The Right X-Direction
         # Don't Let The Car Go Closer Than 20px To The Edge
-        self.rotated_sprite = self.rotate_center(self.sprite, self.angle)
+        self.rotated_sprite = self.rotate_center(self.sprite, self.angle) # gambar mobil yang udah dirotasi dihitung untuk melakukan rotasi terhadap gambar mobil berdasarkan sudut (self.angle)
         self.position[0] += math.cos(math.radians(360 - self.angle)) * self.speed
-        self.position[0] = max(self.position[0], 20)
+        # self.position[0] = max(self.position[0], 20)
+        self.position[0] = max(self.position[0], CAR_SPEED)
         self.position[0] = min(self.position[0], WIDTH - 120)
 
+        #line 116 - 118 update posisi mobil pada sumbu X (kanan) berdasarakn arah hadap mobil (self.angle) dan kecepatan (self.speed)
+        # posisinya dibatasi supaya ngga mendekati border,dengan nilai minimum 20 piksel dna nilai maksimum (WIDTH - 120)
+
         # Ningkatin jarak (self.distance) dan waktu (self.time) berdasarkan kecepatan mobil
-        self.distance += self.speed
+        
         self.time += 1
         
         # Same For Y-Position
         self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
-        self.position[1] = max(self.position[1], 20)
+        self.position[1] = max(self.position[1], CAR_SPEED)
         self.position[1] = min(self.position[1], WIDTH - 120)
+        self.distance += self.speed
+        # prinsip nya sama kayak yang X,cuman posisinya ke Y (kiri)
 
         # Hitung kembali pusat mobil (self.center) berdasarkan posisi mobil yang udah diupdate
         self.center = [int(self.position[0]) + CAR_SIZE_X / 2, int(self.position[1]) + CAR_SIZE_Y / 2]
 
-        # Calculate the coordinates of the car's corners
-        length = 0.5 * CAR_SIZE_X
+        
+        length = 0.5 * CAR_SIZE_X # hitung panjang dari pusat mobil ke tiap salah satu sudut (setengah karna bentuknya persegi,jarak dari pusat ke sudut dibikin setengah)
         left_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 30))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 30))) * length]
         right_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 150))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 150))) * length]
         left_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 210))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 210))) * length]
         right_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 330))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 330))) * length]
         self.corners = [left_top, right_top, left_bottom, right_bottom]
+        
+        # Line 138 - 142 hitung koordinat keempat sudut 
+        # contoh : left_top hitungannya dibagi jadi 2 cos (X) sama sin (Y),terus 360 (lingkaran penuh) dikurnangin self.angel + 30 jadi diputer 330 derajat searah jarum jam )
 
-        # Check for collision and clear the radar list for the next measurements
+        # Manggil metthod check_collision buat meriksa mobilnya bersentuhan sama batas ngga.
+        # Terus di clear list radar (self.radars) buat persiapan pengukuran radar selanjutnya
         self.check_collision(game_map)
-        current_color = game_map.get_at((int(self.center[0]), int(self.center[1])))
-        target_color = (255, 230, 0, 255)
-        tolerance = 10  # Adjust as needed
-
-        if all(abs(a - b) <= tolerance for a, b in zip(current_color, target_color)):
-            # Logic to handle the detection of the yellow color
-            self.angle += 180  # Rotate the car by 180 degrees (adjust as needed)
-            self.speed = 3   # Set a new speed (adjust as needed)
-            print("Yellow color detected -------")
-            self.alive = False
-
-        if game_map.get_at((int(self.center[0]), int(self.center[1]))) == (255, 0, 0, 255):
+        if game_map.get_at((int(self.center[0]), int(self.center[1]))) == FINISH_COLOR:
             self.finish()
-
+                        
         self.radars.clear()
 
+        
         for d in range(-90, 120, 45):
             self.check_radar(d, game_map)
-
-            # Loop di atas menciptakan sensor radar dengan arah tertentu sebanyak lima kali, masing-masing pada sudut -90, -45, 0, 45, dan 90 derajat. 
+        # Loop di atas menciptakan sensor radar dengan arah tertentu sebanyak lima kali, masing-masing pada sudut -90, -45, 0, 45, dan 90 derajat. 
         # Jadi, sensor radarnya bakal diarahin ke lima arah yang berbeda di sekitar mobil dengan interval sudut 45 derajat.
         # 120 itu kayak batas nya gitu 
 
@@ -172,7 +199,6 @@ class Car:
             return_values[i] = int(radar[1] / 30)
             # nilai jarak dari sensor radar dibagi degan 30,dan hasilnya diubah menjadi integer
             # dibagi 30 kayaknya buat ngubah nilai jarak jadi format yang lebih kecil dan sesuai kalo giunakan sebagai masukan jaringan saraf
-
         return return_values
 
     # get_data intinya buat ngumpulin data terus dimasukin ke dalam jaringan saraf.
@@ -185,22 +211,35 @@ class Car:
     
     # is_alive buat nentuin mobilnya hidup atau crash
 
+    # def get_reward(self):
+    #     # Calculate Reward (Maybe Change?)
+    #     # return self.distance / 50.0
+    #     return self.distance / (CAR_SIZE_X / 2)
+
     def get_reward(self):
-        # Calculate Reward (Maybe Change?)
-        # return self.distance / 50.0
-        return self.distance / (CAR_SIZE_X / 2)
-    
-    def rotate_center(self, image, angle):
-        # Rotate The Image
-        rotated_image = pygame.transform.rotate(image, angle)
+        # Koordinat garis finish
+        finish_line_x = X_FINISH_LINE  # Ganti X_FINISH_LINE dengan koordinat X dari garis finish
+        finish_line_y = Y_FINISH_LINE  # Ganti Y_FINISH_LINE dengan koordinat Y dari garis finish
 
-        # Get The New Rect
-        new_rect = rotated_image.get_rect(center=image.get_rect().center)
+        # Hitung jarak dari mobil ke garis finish
+        distance_to_finish = ((self.position[0] - finish_line_x) ** 2 + (self.position[1] - finish_line_y) ** 2) ** 0.5
 
-        # Resize The Image
-        rotated_image = pygame.transform.scale(rotated_image, (CAR_SIZE_X, CAR_SIZE_Y))
+        # Normalisasi jarak agar mendekati nilai 1 saat mobil semakin mendekati garis finish
+        max_distance = ((WIDTH - finish_line_x) ** 2 + (HEIGHT - finish_line_y) ** 2) ** 0.5
+        normalized_distance = 1 - (distance_to_finish / max_distance)
 
-        return rotated_image, new_rect
+        # Normalisasi waktu, misalnya dengan membagi waktu yang berlalu dengan batas waktu maksimal
+        normalized_time = 1 - (self.time / MAX_TIME)
+
+        # Menentukan bobot untuk kontribusi waktu dan jarak terhadap reward
+        weight_distance = 0.7  # Bobot jarak
+        weight_time = 0.3  # Bobot waktu
+
+        # Menggabungkan kontribusi waktu dan jarak untuk mendapatkan reward akhir
+        final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
+        
+        return final_reward
+
 
 
     # def rotate_center(self, image, angle):
@@ -211,111 +250,146 @@ class Car:
     #     rotated_rectangle.center = rotated_image.get_rect().center # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
     #     rotated_image = rotated_image.subsurface(rotated_rectangle).copy() # Mengatur pusat dari rotated_rectangle menjadi pusat dari rect hasil rotasi (rotated_image). Hal ini memastikan bahwa rotasi dilakukan terhadap pusat gambar 
     #     return rotated_image
-
+    
+    def rotate_center(self, image, angle):
+        # Rotate The Image
+        rotated_image = pygame.transform.rotate(image, angle)
+        # Get The New Rect
+        new_rect = rotated_image.get_rect(center=image.get_rect().center)
+        # Resize The Image
+        rotated_image = pygame.transform.scale(rotated_image, (CAR_SIZE_X, CAR_SIZE_Y))
+        return rotated_image, new_rect
+    
     # rotate_center intinya buat mastiin ketika gambar nya diputar pusat rotasinya tetep dipertahanin
 
-def run_simulation(genomes, config):
-    
-    # Empty Collections For Nets and Cars
-    nets = [] # nets itu sebuah list yang menyimpan objek jaringan saraf yang digunakan untuk mengendalikan perilaku mobil dalam simulasi. 
-    cars = []
+def second_largest_index(arr):
+    max_val = max(arr)
+    arr.remove(max_val)
+    second_max = max(arr)
+    return arr.index(second_max)
 
-    # Inisialisasi modul Pygame dan membuat layar dengan ukuran yang telah ditentukan
+simulation_data = []
+def color_match(color, target_colors, tolerance=10):
+    for target_color in target_colors:
+        if all(abs(c1 - c2) <= tolerance for c1, c2 in zip(color, target_color)):
+            return True
+    return False
+
+def run_simulation(genomes, config):
+    # Empty Collections For Nets and Cars
+    nets = []
+    cars = []
+    obstacles = [
+        {"name": "lampu_merah", "colors": [(222, 89, 78, 255), (200, 80, 70, 255)]},
+        {"name": "Orang_nyebrang", "colors": [(255, 183, 76, 255)]},
+        {"name": "mobil", "colors": [(255, 188, 5, 255)]},
+        # Add more obstacles if needed
+    ]
+    # Initialize Pygame and create a screen with the specified size
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-    #-----Genomes-----#
-    for i, g in genomes: # Melakukan iterasi melalui setiap genom dalam genomes,Variabel g akan mewakili genom saat ini,i diabaikan
-        net = neat.nn.FeedForwardNetwork.create(g, config) # Membuat jaringan saraf feedforward baru (net) menggunakan informasi genom (g) dan konfigurasi (config). Setiap mobil dalam simulasi akan memiliki jaringan sarafnya sendiri.
-        nets.append(net) # Menambahkan jaringan saraf yang baru dibuat ke dalam list nets. List ini akan menyimpan semua jaringan saraf yang digunakan untuk mengontrol mobil dalam simulasi.
-        g.fitness = 0 # Mengatur nilai fitness genom saat ini menjadi 0. Nilai fitness ini akan diakumulasikan selama simulasi berjalan, tergantung seberapa baik mobil berkinerja.
+    # ----- Genomes ----- #
+    for i, g in genomes:
+        net = neat.nn.FeedForwardNetwork.create(g, config)
+        nets.append(net)
+        g.fitness = 0
 
-        cars.append(Car()) # Menambahkan objek mobil baru (Car()) ke dalam list cars. Setiap mobil dalam simulasi akan diwakili oleh satu objek mobil.
+        cars.append(Car(i, [952, 102]))
 
-    # Clock Settings
-    # Font Settings & Loading Map
-    clock = pygame.time.Clock() # buat mengatur kecepatan frame (60 FPS)
-    generation_font = pygame.font.SysFont("Arial", 30) # gaya tulisan nampilin informasi generasi 
-    alive_font = pygame.font.SysFont("Arial", 20) # gaya tulisan nampilin informasi alive
-    game_map = pygame.image.load('Rute_obstacle.png').convert() # load gambar peta lintasan terus di convert() ke format yang lebih efisien untuk kecepatan pemrosesan 
-    # Convert Speeds Up A Lot
+    clock = pygame.time.Clock()
+    generation_font = pygame.font.SysFont("Arial", 30)
+    alive_font = pygame.font.SysFont("Arial", 20)
+    game_map = pygame.image.load('./assets/Rute_final_Obstacle2.png').convert()
 
     global current_generation
-    current_generation += 1 # Meningkatkan nilai variabel global current_generation sebanyak 1. Variabel ini digunakan untuk melacak generasi saat ini dalam simulasi neuroevolusi.
+    current_generation += 1
 
     # Simple Counter To Roughly Limit Time (Not Good Practice)
     counter = 0
+    # Add a new variable for tracking paused time and an initial pause flag
+    paused_times = [0] * len(cars)
+    initial_pause_done = [False] * len(cars)
+    pause_duration = 5
 
     while True:
-        # Penanganan event untuk keluar dari permainan jika tombol keluar di klik
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit(0)
 
-        # ---- Aksi mobil --- #
-        for i, car in enumerate(cars): # terasi melalui setiap mobil dalam list cars menggunakan fungsi enumerate untuk mendapatkan indeks dan objek mobil.
-            output = nets[i].activate(car.get_data()) # Mengaktifkan jaringan saraf mobil ke-i dengan memberikan data dari mobil tersebut sebagai input. Output dari jaringan saraf merupakan nilai aktivasi untuk setiap node output
-            choice = output.index(max(output)) # Memilih tindakan (choice) berdasarkan indeks node output dengan nilai aktivasi maksimum
-           
-            # if choice == 2:
-            #     if(car.speed - 2 >= 100):
-            #         car.speed -= 2 # Slow Down
-            # else:
-            #         car.speed += 10 # Speed Up
-            #         break   
-            if choice == 0:
-                car.angle += 10 # Left
-            elif choice == 1:
-                car.angle -= 10 # Right
-            elif choice == 2:
-                if(car.speed - 2 >= 12):
-                    car.speed -= 2 # Slow Down
-            else:
-                car.speed += 2 # Speed Up
-
-        #  setiap mobil dalam simulasi mengambil keputusan berdasarkan output dari jaringan sarafnya.
-        
-        # Check If Car Is Still Alive
-        # Increase Fitness If Yes And Break Loop If Not
-        still_alive = 0
+        # ---- Car Actions ---- #
         for i, car in enumerate(cars):
+            output = nets[i].activate(car.get_data())
+            choice = output.index(max(output))
+
+            if random.random() < PROB_EXPLORE:
+                choice = second_largest_index(output)
+
+            if choice == 0:
+                car.speed /= 2
+                car.angle -= 17  # Left
+                car.speed *= 2
+            elif choice == 1:
+                car.speed /= 2
+                car.angle += 17  # Right
+                car.speed *= 2
+
+            # ---- Pause Condition ---- #
+            current_color = game_map.get_at((int(car.center[0]), int(car.center[1])))
+            for obstacle in obstacles:
+                if color_match(current_color, obstacle["colors"]):
+                    # Check if the color at the car's position matches any colors in the current obstacle
+                    if not initial_pause_done[i]:
+                        paused_times[i] = pygame.time.get_ticks() / 1000  # Convert milliseconds to seconds
+                        initial_pause_done[i] = True
+
+                    current_time = pygame.time.get_ticks() / 1000  # Convert milliseconds to seconds
+                    elapsed_time = current_time - paused_times[i]
+
+                    if elapsed_time < pause_duration:
+                        car.speed = 0  # Stop the car
+                        continue  # Skip the rest of the loop and continue the pause
+
+                    # Reset pause conditions after the pause duration is over
+                    car.speed = CAR_SPEED  # Reset the speed
+
+            # Track time when the car is alive
             if car.is_alive():
-                still_alive += 1
                 car.update(game_map)
                 genomes[i][1].fitness += car.get_reward()
 
+        # Check If Car Is Still Alive
+        # Increase Fitness If Yes And Break Loop If Not
+        still_alive = sum(car.is_alive() for car in cars)
+
         if still_alive == 0:
             break
-        # Jika tidak ada mobil yang masih hidup, loop utama dihentikan.
 
         counter += 1
-        if counter == 30 * 40: # Stop After About 20 Seconds
+        if counter == 30 * 40:  # Stop After About 20 Seconds
             break
-
-        # Menggunakan counter untuk membatasi waktu simulasi, dihentikan setelah sekitar 20 detik (30 frames/detik * 40 detik).
 
         # Draw Map And All Cars That Are Alive
         screen.blit(game_map, (0, 0))
         for car in cars:
             if car.is_alive():
                 car.draw(screen)
-        # Menampilkan peta dan semua mobil yang masih hidup pada layar.
-        
+
         # Display Info
-        text = generation_font.render("Generation: " + str(current_generation), True, (0,0,0))
+        text = generation_font.render("Generation: " + str(current_generation), True, (0, 0, 0))
         text_rect = text.get_rect()
-        text_rect.center = (900, 450)
+        text_rect.center = (245, 144)
         screen.blit(text, text_rect)
 
         text = alive_font.render("Still Alive: " + str(still_alive), True, (0, 0, 0))
         text_rect = text.get_rect()
-        text_rect.center = (900, 490)
+        text_rect.center = (245, 194)
         screen.blit(text, text_rect)
 
-        # ini buat nampilin informasi mobil yang hidup ada berapa aja
+        pygame.display.flip()
+        clock.tick(60)
 
-        pygame.display.flip() # Fungsi ini digunakan untuk memperbarui tampilan pada layar. Semua perubahan yang telah dilakukan dalam satu frame diaplikasikan dan ditampilkan pada layar. Ini termasuk pergerakan objek, pembaruan skor
-        clock.tick(60) # 60 FPS
+
 
 
 if __name__ == "__main__":
