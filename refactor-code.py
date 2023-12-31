@@ -16,11 +16,8 @@ HEIGHT = 1080
 CAR_SIZE_X = 14  
 CAR_SIZE_Y = 35
 CAR_SIZE = (CAR_SIZE_X,CAR_SIZE_Y)
-CAR_SPEED = 10
+CAR_SPEED = 16.5
 ANGLE = -180
-
-# => Start position
-START_POS = [1656, 665]
 
 # => Finis line
 X_FINISH_LINE = 37
@@ -173,8 +170,8 @@ class Car:
         normalized_distance = 1 - (distance_to_finish / max_distance)
         normalized_time = 1 - (self.time / MAX_TIME)
        
-        weight_distance = 0.7  
-        weight_time = 0.3  
+        weight_distance = 0.4 
+        weight_time = 0.6  
 
         final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
         
@@ -289,8 +286,8 @@ def run_simulation(genomes, config):
                 simulation_data.append({
                 'generation': current_generation,
                 'car_id': car.car_id, 
-                'start_position_x': START_POS[0],
-                'start_position_y': START_POS[1],
+                'start_position_x': car.start_position[0],
+                'start_position_y': car.start_position[1],
                 'end_position_x': car.end_position[0] if car.end_position is not None else None,
                 'end_position_y': car.end_position[1] if car.end_position is not None else None,
                 'is_alive': car.is_alive(),
