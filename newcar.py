@@ -25,7 +25,7 @@ CAR_SIZE_Y = 35
 X_FINISH_LINE = 835
 Y_FINISH_LINE = 462
 
-CAR_AVG_SPEED = 10
+CAR_AVG_SPEED = 1
 
 BORDER_COLOR = (255, 255, 255, 255) # ini buat batas jalan atau border nya
 
@@ -152,9 +152,6 @@ class Car:
         #line 116 - 118 update posisi mobil pada sumbu X (kanan) berdasarakn arah hadap mobil (self.angle) dan kecepatan (self.speed)
         # posisinya dibatasi supaya ngga mendekati border,dengan nilai minimum 20 piksel dna nilai maksimum (WIDTH - 120)
 
-        # Ningkatin jarak (self.distance) dan waktu (self.time) berdasarkan kecepatan mobil
-        self.distance += self.speed
-        self.time += 1
         
         # Same For Y-Position
         self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
@@ -162,6 +159,10 @@ class Car:
         self.position[1] = min(self.position[1], WIDTH - 120)
         # prinsip nya sama kayak yang X,cuman posisinya ke Y (kiri)
 
+        # Ningkatin jarak (self.distance) dan waktu (self.time) berdasarkan kecepatan mobil
+        self.distance += self.speed
+        self.time += 1
+        
         # Hitung kembali pusat mobil (self.center) berdasarkan posisi mobil yang udah diupdate
         self.center = [int(self.position[0]) + CAR_SIZE_X / 2, int(self.position[1]) + CAR_SIZE_Y / 2]
 

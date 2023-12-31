@@ -19,7 +19,7 @@ HEIGHT = 1080
 CAR_SIZE_X = 14
 CAR_SIZE_Y = 35
 CAR_SIZE = (CAR_SIZE_X, CAR_SIZE_Y)
-CAR_SPEED = 10
+CAR_SPEED = 5
 ANGLE = -90
 
 # => Start Position
@@ -35,13 +35,10 @@ FINISH_POS = [X_FINISH_LINE, Y_FINISH_LINE]
 MAX_TIME = 100
 PROB_EXPLORE = 0.15
 BORDER_COLOR = (255, 255, 255, 255)
-WEIGHT_TIME = 0.5
-WEIGHT_DISTANCE = 0.5
-LIMIT_GENERATION = 1000
+WEIGHT_TIME = 0.3
+WEIGHT_DISTANCE = 0.7
+LIMIT_GENERATION = 1
 # -=== END: Config ===-
-
-
-current_generation = 0
 
 
 # -=== START: Car Class ===-
@@ -49,19 +46,20 @@ class Car:
     # => Construct
     def __init__(self, car_id):
         self.car_id = car_id
+        self.position = START_POS
         self.end_position = None
+        
         self.sprite = pygame.image.load('./assets/car.png').convert()
         self.sprite = pygame.transform.scale(self.sprite, CAR_SIZE)
         self.rotated_sprite = self.sprite
         
-        self.position = START_POS
         self.angle = ANGLE
-        self.speed = 0
         
         self.center = [self.position[0] + CAR_SIZE_X / 2, self.position[1] + CAR_SIZE_Y / 2]
         self.radars = []
         self.drawing_radars = []
         
+        self.speed = 0
         self.speed_set = False 
         self.alive = True 
         self.distance = 0
@@ -91,11 +89,11 @@ class Car:
     def check_collision(self, game_map):
         self.alive = True
         for point in self.corners:
-            if game_map.get_at( (int(point[0]), int(point[1])) ) == BORDER_COLOR: 
-                self.alive = False 
+            if game_map.get_at((int(point[0]), int(point[1]))) == BORDER_COLOR: 
                 self.end_position = self.position[:]
+                self.alive = False 
                 break
-            print(point)
+            # print(point)
             
     # => Fungsi Check Radar 
     def check_radar(self, degree, game_map):
@@ -148,11 +146,6 @@ class Car:
 
         for d in range(-90, 120, 45):
             self.check_radar(d, game_map)
-    
-
-    def is_alive(self):
-        # Basic Alive Function
-        return self.alive
 
 
     # => Fungsi mengambil data radar
@@ -165,6 +158,11 @@ class Car:
             
         return return_values
     
+
+    # => Basic Alive Function
+    def is_alive(self):
+        return self.alive
+
 
     # ==> Reward Function
     def get_reward(self):
@@ -189,6 +187,7 @@ class Car:
     def rotate_center(self, image, angle):
         rotated_image = pygame.transform.rotate(image, angle)
         new_rect = rotated_image.get_rect(center=image.get_rect().center)
+        # rotated_image = pygame.transform.scale(rotated_image, CAR_SIZE)
         rotated_image = pygame.transform.scale(rotated_image, CAR_SIZE)
         return rotated_image, new_rect
     
@@ -204,7 +203,6 @@ def second_largest_index(arr):
     return arr.index(second_max)
 
 
-simulation_data = []
 def run_simulation(genomes, config):
     nets = []
     cars = []
@@ -213,6 +211,7 @@ def run_simulation(genomes, config):
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
     for i, g in genomes:
+        # print(f"i: {i} \t\tg: {g}")
         net = neat.nn.FeedForwardNetwork.create(g, config)
         nets.append(net)
         g.fitness = 0
@@ -224,7 +223,7 @@ def run_simulation(genomes, config):
         alive_font = pygame.font.SysFont("Arial", 20)  
         game_map = pygame.image.load('assets/Rute_cabang.png').convert()
 
-        global current_generation
+        global current_generation, stop_program, simulation_data
         current_generation += 1
 
         counter = 0
@@ -235,6 +234,8 @@ def run_simulation(genomes, config):
                     sys.exit(0)
 
             for i, car in enumerate(cars):
+                # print(f'car: {i} \t-\t{car.position}\t-\t{car.distance}')
+                # stop_program = True
                 output = nets[i].activate(car.get_data())
                 choice = output.index(max(output))
 
@@ -242,18 +243,14 @@ def run_simulation(genomes, config):
                     choice = second_largest_index(output)
                 
                 if choice == 0: 
-                    car.speed /= 2
-                    car.speed /= 2
                     car.angle -= 17 # Left
-                    car.speed *= 2
-                    car.speed *= 2
                 elif choice == 1:
-                    car.speed /= 2
-                    car.speed /= 2
                     car.angle += 17 # Right
-                    car.speed *= 2
-                    car.speed *= 2
-            
+                else: 
+                    continue
+
+                print(choice)
+
             still_alive = 0
             for i, car in enumerate(cars):
                 if car.is_alive():
@@ -303,6 +300,12 @@ def run_simulation(genomes, config):
 # -=== END: Function ===-
 
 
+# -=== START: Global Variabel ===-
+current_generation = 0
+simulation_data = []
+stop_program = False
+# -=== END: Global Variabel ===-
+
 
 # -=== START: Main ===-
 if __name__ == "__main__":
@@ -321,7 +324,7 @@ if __name__ == "__main__":
     stats = neat.StatisticsReporter()
     population.add_reporter(stats)
 
-    population.run(run_simulation, LIMIT_GENERATION)
+    population.run(run_simulation, 1000)
 
     df = pd.DataFrame(simulation_data)
     df.to_csv('simulation_data.csv', index=False)
