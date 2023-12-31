@@ -14,14 +14,14 @@ import pygame
 WIDTH = 1920
 HEIGHT = 1080
 
-CAR_SIZE_X = 14
-CAR_SIZE_Y = 35
+CAR_SIZE_X = 18
+CAR_SIZE_Y = 45
 
 X_FINISH_LINE = 835
 Y_FINISH_LINE = 462
 FINISH_COLOR = (255, 0, 0, 255)
 
-CAR_SPEED = 5
+CAR_SPEED = 16.5
 BORDER_COLOR = (255, 255, 255, 255)
 
 MAX_TIME = 100
@@ -219,7 +219,7 @@ class Car:
 
         weight_distance = 0.5
         weight_time = 0.5
-        print(self.time, normalized_distance, normalized_time, MAX_TIME)
+        # print(self.time, normalized_distance, normalized_time, MAX_TIME)
 
         final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
         return final_reward
