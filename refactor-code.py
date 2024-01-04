@@ -1,163 +1,218 @@
+# -=== START: Import Library ===-
 import math
-import random
-import sys
+import random 
+import sys 
 import os
+import pandas as pd 
 
-import neat
+import neat 
 import pygame
-import pandas as pd
+# -=== END: Import Library ===-
 
 
-# => Map 
-WIDTH = 1920 #lebar sama ukuran layar 
+# -=== START: Config ===-
+WIDTH = 1920
 HEIGHT = 1080
 
-# => Car
-CAR_SIZE_X = 14  
+CAR_SIZE_X = 14
 CAR_SIZE_Y = 35
-CAR_SIZE = (CAR_SIZE_X,CAR_SIZE_Y)
-CAR_SPEED = 16.5
-ANGLE = -180
 
-# => Finis line
 X_FINISH_LINE = 37
 Y_FINISH_LINE = 862
-FINISH_POS = [X_FINISH_LINE,Y_FINISH_LINE]
 FINISH_COLOR = (255, 0, 0, 255)
 
-# => Utility
+CAR_SPEED = 16.5
 BORDER_COLOR = (255, 255, 255, 255)
+
 MAX_TIME = 100
 PROB_EXPLORE = 0.15
 
 current_generation = 0
 simulation_data = []
+# -=== END: Config ===-
 
-# -=== START : Car Class ===-
+
+
+# -=== Start: Global Function ===-
+def get_center(position):
+    return [int(position[0]) + CAR_SIZE_X / 2, int(position[1]) + CAR_SIZE_Y / 2]
+
+def corner_color_collision(game_map, point):
+    return game_map.get_at((int(point[0]), int(point[1]))) == BORDER_COLOR
+
+def calculate_radar_length(center, angle, degree, length):
+    x = int(center[0] + math.cos(math.radians(360 - (angle + degree))) * length)
+    y = int(center[1] + math.sin(math.radians(360 - (angle + degree))) * length)
+    return x, y
+
+def check_border_and_length(game_map, x, y, length):
+    return game_map.get_at((x, y)) == BORDER_COLOR and length < 300
+
+def calculate_radar_distance_to_border(center, x, y):
+    return int(math.sqrt(math.pow(x - center[0], 2) + math.pow(y - center[1], 2)))
+
+def update_position(position, angle, speed, car_speed, width):
+    cos_val = math.cos(math.radians(360 - angle)) * speed 
+    sin_val = math.sin(math.radians(360 - angle)) * speed
+
+    new_x = position[0] + cos_val
+    new_x = min(max(new_x, car_speed), width - 120)
+    
+    new_y = position[1] + sin_val
+    new_y = min(max(new_y, car_speed), width - 120)
+    
+    return new_x, new_y
+
+def calculate_car_corner(center, angle, length):
+    left_top = [center[0] + math.cos(math.radians(360 - (angle + 30))) * length, center[1] + math.sin(math.radians(360 - (angle + 30))) * length]
+    right_top = [center[0] + math.cos(math.radians(360 - (angle + 150))) * length, center[1] + math.sin(math.radians(360 - (angle + 150))) * length]
+    left_bottom = [center[0] + math.cos(math.radians(360 - (angle + 210))) * length, center[1] + math.sin(math.radians(360 - (angle + 210))) * length]
+    right_bottom = [center[0] + math.cos(math.radians(360 - (angle + 330))) * length, center[1] + math.sin(math.radians(360 - (angle + 330))) * length]
+
+    return left_top, right_top, left_bottom, right_bottom
+
+def is_finish(game_map, center):
+    return game_map.get_at((int(center[0]), int(center[1]))) == FINISH_COLOR
+
+def calculate_distance(x1, y1, x2, y2):
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+def calculate_max_distance(WIDTH, HEIGHT, finish_line_x, finish_line_y):
+    return ((WIDTH - finish_line_x) ** 2 + (HEIGHT - finish_line_y) ** 2) ** 0.5
+
+def second_largest_index(arr):
+    try: 
+        max_val = max(arr)
+        return arr.index(max(filter(lambda x: x != max_val, arr)))
+    except:
+        print(arr)
+
+def draw_text(screen, font, text, color, x, y):
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.center = (x, y)
+    screen.blit(text_surface, text_rect)
+
+
+def color_match(color, target_colors, tolerance=10):
+    for target_color in target_colors:
+        if all(abs(c1 - c2) <= tolerance for c1, c2 in zip(color, target_color)):
+            return True
+    return False
+
+# -=== End: Global Function ===-
+
+
+
+# -=== START: Car Class ===-
 class Car:
-
+    
     def __init__(self, car_id, start_position):
-        self.car_id = car_id 
+        self.car_id = car_id
         self.start_position = start_position
-        self.end_position = None  
-   
-        self.sprite = pygame.image.load('./assets/car.png').convert() 
-        self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE)) 
+        self.end_position = None 
+
+        self.sprite = pygame.image.load('assets/car.png').convert()
+        self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE_X, CAR_SIZE_Y))
         self.rotated_sprite = self.sprite 
 
         self.position =[1656, 665]
-        self.angle = ANGLE 
+        self.angle = -180
         self.speed = 0 
+        self.speed_set = False
 
-        self.speed_set = False 
+        self.center = get_center(self.position)
 
-        self.center = [self.position[0] + CAR_SIZE_X / 2, self.position[1] + CAR_SIZE_Y / 2] 
-
-        self.radars = [] 
-        self.drawing_radars = [] 
+        self.radars = []
+        self.drawing_radars = []
 
         self.alive = True 
-
-        self.distance = 0 
-        self.time = 0 
-
-
-    def draw(self, screen):
-        rotated_sprite,new_rect = self.rotate_center(self.sprite, self.angle)
-        screen.blit(rotated_sprite, self.position)
-        self.draw_radar(screen)  
-
-
-    def draw_radar(self, screen):
-        for radar in self.radars: 
-            position = radar[0] 
-            pygame.draw.line(screen, (0, 255, 0), self.center, position, 1) 
-            pygame.draw.circle(screen, (0, 255, 0), position, 5) 
+        self.distance = 0
+        self.time = 0
 
 
     def finish(self):
-        self.alive = False
-        self.end_position = self.position[:]  
+        self.alive = False 
+        self.end_position = self.position[:]
         print("Mobil telah melewati garis finish!")
-        print(f"Time: {self.time}\t-\tDistance: {self.distance}")
-    
+        # print(f"Time: {self.time}\t-\tDistance: {self.distance}")
 
-    # ----Fungsi draw_radar buat ngegambar sensor deteksi batas pada layar---- #
+    
+    def draw(self, screen):
+        rotated_sprite, new_rect = self.rotate_center(self.sprite, self.angle)
+        screen.blit(rotated_sprite, self.position)
+        self.draw_radar(screen)
+
+    
+    def draw_radar(self, screen):
+        for radar in self.radars:
+            position = radar[0]
+            pygame.draw.line(screen, (0, 255, 0), self.center, position, 1)
+            pygame.draw.circle(screen, (0, 255, 0), position, 5)
+
 
     def check_collision(self, game_map):
-        self.alive = True  
-        for point in self.corners:  
-            if game_map.get_at((int(point[0]), int(point[1]))) == BORDER_COLOR:
-                print(point)
+        self.alive = True 
+        for point in self.corners:
+            if corner_color_collision(game_map, point):
                 self.alive = False
                 break
-        
-    # --- Fungi check_collison intinya buat ngecek si mobil nyentuh batas jalannya ngga ---- #
-
-    def check_radar(self, degree, game_map):
-        length = 0 # 
-        x = int(self.center[0] + math.cos(math.radians(360 - (self.angle + degree))) * length)
-        y = int(self.center[1] + math.sin(math.radians(360 - (self.angle + degree))) * length)
-       
-        # looping selama warna dari sensor ga sama kayak BORDER COLOR dan panjang garis nya <300
-        while not game_map.get_at((x, y)) == BORDER_COLOR and length < 300:
-            length = length + 1 #panjang jarak ditambahin
-            x = int(self.center[0] + math.cos(math.radians(360 - (self.angle + degree))) * length)
-            y = int(self.center[1] + math.sin(math.radians(360 - (self.angle + degree))) * length)
-
-        dist = int(math.sqrt(math.pow(x - self.center[0], 2) + math.pow(y - self.center[1], 2)))
-        self.radars.append([(x, y), dist])
-       
-    # ---- Fungsi check_radar buat ngukur jarak dari sensor radar mobil ke batas ---- #
     
+    
+    def check_radar(self, degree, game_map):
+        length = 0
+        x, y = calculate_radar_length(self.center, self.angle, degree, length)
 
+        try:
+            # while not check_border_and_length(game_map, x, y, length):
+            while not game_map.get_at((x, y)) == BORDER_COLOR and length < 300:
+                length = length + 1
+                x, y = calculate_radar_length(self.center, self.angle, degree, length)
+        except:
+            print(length, x, y)
+        
+        
+        dist = calculate_radar_distance_to_border(self.center, x, y)
+        self.radars.append([(x, y), dist])
+
+    
     def update(self, game_map):
         if not self.speed_set:
             self.speed = CAR_SPEED
             self.speed_set = True
 
-        self.rotated_sprite = self.rotate_center(self.sprite, self.angle) # gambar mobil yang udah dirotasi dihitung untuk melakukan rotasi terhadap gambar mobil berdasarkan sudut (self.angle)
-        self.position[0] += math.cos(math.radians(360 - self.angle)) * self.speed
-        self.position[0] = max(self.position[0], CAR_SPEED)
-        self.position[0] = min(self.position[0], WIDTH - 120)
-    
-        self.time += 1
-        
-        self.position[1] += math.sin(math.radians(360 - self.angle)) * self.speed
-        self.position[1] = max(self.position[1], CAR_SPEED)
-        self.position[1] = min(self.position[1], WIDTH - 120)
+        self.rotated_sprite = self.rotate_center(self.sprite, self.angle)
+
+        self.position[0], self.position[1] = update_position(self.position, self.angle, self.speed, CAR_SPEED, WIDTH)
+
         self.distance += self.speed
-        
-        self.center = [int(self.position[0]) + CAR_SIZE_X / 2, int(self.position[1]) + CAR_SIZE_Y / 2]
-        
-        length = 0.5 * CAR_SIZE_X 
-        left_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 30))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 30))) * length]
-        right_top = [self.center[0] + math.cos(math.radians(360 - (self.angle + 150))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 150))) * length]
-        left_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 210))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 210))) * length]
-        right_bottom = [self.center[0] + math.cos(math.radians(360 - (self.angle + 330))) * length, self.center[1] + math.sin(math.radians(360 - (self.angle + 330))) * length]
+        self.time += 1
+
+        self.center = get_center(self.position)
+        length = 0.5 * CAR_SIZE_X
+
+        left_top, right_top, left_bottom, right_bottom = calculate_car_corner(self.center, self.angle, length)
         self.corners = [left_top, right_top, left_bottom, right_bottom]
-      
+
         self.check_collision(game_map)
-        if game_map.get_at((int(self.center[0]), int(self.center[1]))) == FINISH_COLOR:
+        if is_finish(game_map, self.center):
             self.finish()
-                        
+
         self.radars.clear()
-        
         for d in range(-90, 120, 45):
             self.check_radar(d, game_map)
-       
+    
     def get_data(self):
         radars = self.radars 
-        return_values = [0, 0, 0, 0, 0] 
-        for i, radar in enumerate(radars): 
+        return_values = [0, 0, 0, 0, 0]
+        for i, radar in enumerate(radars):
             return_values[i] = int(radar[1] / 30)
-        
         return return_values
-
-
+    
+    
     def is_alive(self):
-
         return self.alive
+    
 
     def get_reward(self):
         
@@ -176,33 +231,18 @@ class Car:
         final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
         
         return final_reward
-
-
+    
     def rotate_center(self, image, angle):
-        
         rotated_image = pygame.transform.rotate(image, angle)
         new_rect = rotated_image.get_rect(center=image.get_rect().center)
-        
+    
         rotated_image = pygame.transform.scale(rotated_image, (CAR_SIZE_X, CAR_SIZE_Y))
         return rotated_image, new_rect
-    
-    # rotate_center intinya buat mastiin ketika gambar nya diputar pusat rotasinya tetep dipertahanin
+# -=== End: Car Class ===-
 
-def second_largest_index(arr):
-    max_val = max(arr)
-    arr.remove(max_val)
-    second_max = max(arr)
-    return arr.index(second_max)
 
-simulation_data = []
-def color_match(color, target_colors, tolerance=10):
-    for target_color in target_colors:
-        if all(abs(c1 - c2) <= tolerance for c1, c2 in zip(color, target_color)):
-            return True
-    return False
 
 def run_simulation(genomes, config):
-
     nets = []
     cars = []
     obstacles = [
@@ -214,12 +254,11 @@ def run_simulation(genomes, config):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-    # ----- Genomes ----- #
     for i, g in genomes:
         net = neat.nn.FeedForwardNetwork.create(g, config)
         nets.append(net)
-        g.fitness = 0
 
+        g.fitness = 0
         cars.append(Car(i, [952, 102]))
 
     clock = pygame.time.Clock()
@@ -230,19 +269,15 @@ def run_simulation(genomes, config):
     global current_generation
     current_generation += 1
 
-    
-    counter = 0
-    
+    counter = 0   
     paused_times = [0] * len(cars)
     initial_pause_done = [False] * len(cars)
     pause_duration = 3
-
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit(0)
 
-        # ---- Car Actions ---- #
         for i, car in enumerate(cars):
             output = nets[i].activate(car.get_data())
             choice = output.index(max(output))
@@ -258,8 +293,6 @@ def run_simulation(genomes, config):
                 car.speed /= 2
                 car.angle += 17  # Right
                 car.speed *= 2
-
-            # ---- Pause Condition ---- #
             current_color = game_map.get_at((int(car.center[0]), int(car.center[1])))
             for obstacle in obstacles:
                 if color_match(current_color, obstacle["colors"]):
@@ -296,57 +329,50 @@ def run_simulation(genomes, config):
                 'reward': car.get_reward(),
 
             })
-
-       
-        still_alive = sum(car.is_alive() for car in cars)
+        still_alive = 0
+        for i, car in enumerate(cars):
+            if car.is_alive():
+                still_alive += 1
+                car.update(game_map)
+                genomes[i][1].fitness += car.get_reward()
 
         if still_alive == 0:
+            break 
+
+        counter += 1 
+        # Limit per car buat nyelesaiin
+        if counter == 30*40:
             break
 
-        counter += 1
-        if counter == 30 * 40:  
-            break
-
-        screen.blit(game_map, (0, 0))
+        screen.blit(game_map, (0,0))
         for car in cars:
             if car.is_alive():
                 car.draw(screen)
 
-        # Display Info
-        text = generation_font.render("Generation: " + str(current_generation), True, (0, 0, 0))
-        text_rect = text.get_rect()
-        text_rect.center = (245, 144)
-        screen.blit(text, text_rect)
-
-        text = alive_font.render("Still Alive: " + str(still_alive), True, (0, 0, 0))
-        text_rect = text.get_rect()
-        text_rect.center = (245, 194)
-        screen.blit(text, text_rect)
+        generation_text = "Generation: " + str(current_generation)
+        draw_text(screen, generation_font, generation_text, (0, 0, 0), 245, 144)
+        alive_text = "Still Alive: " + str(still_alive)
+        draw_text(screen, alive_font, alive_text, (0, 0, 0), 245, 194)
 
         pygame.display.flip()
         clock.tick(60)
 
 
 
-
+# -=== Start: Main ===-
 if __name__ == "__main__":
-    
-    # Load Config
-    config_path = "./config.txt" # File konfigurasi ini mengandung informasi mengenai parameter-parameter yang diperlukan untuk menjalankan algoritma NEAT (NeuroEvolution of Augmenting Topologies).
+    config_path = "./config.txt"
     config = neat.config.Config(neat.DefaultGenome,
                                 neat.DefaultReproduction,
                                 neat.DefaultSpeciesSet,
                                 neat.DefaultStagnation,
-                                config_path)
-
-    population = neat.Population(config) 
-    population.add_reporter(neat.StdOutReporter(True))  
-    stats = neat.StatisticsReporter() 
-    population.add_reporter(stats) 
+                                config_path
+                                )
     
-    # Run Simulation For A Maximum of 1000 Generations
+    population = neat.Population(config)
+    population.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+
     population.run(run_simulation, 1000)
     df = pd.DataFrame(simulation_data)
     df.to_csv('simulation_data.csv', index=False)
-    print(df)
-
