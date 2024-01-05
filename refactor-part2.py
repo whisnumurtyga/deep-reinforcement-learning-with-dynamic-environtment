@@ -4,6 +4,7 @@ import random
 import sys 
 import os
 import pandas as pd 
+from datetime import datetime
 
 import neat 
 import pygame
@@ -13,6 +14,8 @@ import pygame
 # -=== START: Config ===-
 WIDTH = 1920
 HEIGHT = 1080
+
+START_POS = [952, 102]
 
 CAR_SIZE_X = 18
 CAR_SIZE_Y = 45
@@ -25,7 +28,7 @@ CAR_SPEED = 16.5
 BORDER_COLOR = (255, 255, 255, 255)
 
 MAX_TIME = 100
-PROB_EXPLORE = 0.15
+PROB_EXPLORE = 0.35
 
 current_generation = 0
 # -=== END: Config ===-
@@ -71,7 +74,7 @@ def calculate_car_corner(center, angle, length):
     return left_top, right_top, left_bottom, right_bottom
 
 def is_finish(game_map, center):
-    return game_map.get_at((int(center[0]), int(center[1]))) == FINISH_COLOR
+    return game_map.get_at((int(center[0]), int(center[1]))) == (255, 0, 0, 255)
 
 def calculate_distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
@@ -91,8 +94,36 @@ def draw_text(screen, font, text, color, x, y):
     text_rect = text_surface.get_rect()
     text_rect.center = (x, y)
     screen.blit(text_surface, text_rect)
-# -=== End: Global Function ===-
 
+
+def save_car_data(car, current_generation):
+    try:
+        car_data = {
+            "generation" : current_generation,
+            "car_id" : car.car_id,
+            "start_position": "1656 - 665",
+            "end_position": [f"{round(car.end_position[0], 2)} - {round(car.end_position[1], 2)}"],
+            # "end_position": car.end_position,
+            "is_finish" : car.is_finish,
+            "total_distance" : car.distance,
+            "total_time" : car.time,
+            "reward" : car.get_reward(),
+        }
+
+        car_data = pd.DataFrame(car_data)
+        file_name = 'data_append.csv'
+
+        if not os.path.isfile(file_name):
+            car_data.to_csv(file_name, index=False)
+        else:
+            with open(file_name, 'a') as file:
+                car_data.to_csv(file, header=False, index=False, mode='a')
+        print('car die data appended success')
+
+    except Exception as e:
+        print(e)
+        print('car die but data not appended')
+# -=== End: Global Function ===-
 
 
 # -=== START: Car Class ===-
@@ -100,15 +131,15 @@ class Car:
     
     def __init__(self, car_id, start_position):
         self.car_id = car_id
-        self.start_position = start_position
         self.end_position = None 
 
         self.sprite = pygame.image.load('assets/car.png').convert()
         self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE_X, CAR_SIZE_Y))
         self.rotated_sprite = self.sprite 
 
-        self.position = [952, 102]
-        self.angle = -90 
+        # self.position = start_position
+        self.position = start_position
+        self.angle = -180 
         self.speed = 0 
         self.speed_set = False
 
@@ -120,11 +151,14 @@ class Car:
         self.alive = True 
         self.distance = 0
         self.time = 0
+        self.is_finish = False
 
 
     def finish(self):
         self.alive = False 
         self.end_position = self.position[:]
+        self.is_finish = True
+        save_car_data(self, current_generation)
         print("Mobil telah melewati garis finish!")
         # print(f"Time: {self.time}\t-\tDistance: {self.distance}")
 
@@ -147,6 +181,7 @@ class Car:
         for point in self.corners:
             if corner_color_collision(game_map, point):
                 self.alive = False
+                self.end_position = self.position[:]
                 break
     
     
@@ -186,7 +221,8 @@ class Car:
         self.corners = [left_top, right_top, left_bottom, right_bottom]
 
         self.check_collision(game_map)
-        if is_finish(game_map, self.center):
+        # if is_finish(game_map, self.center):
+        if game_map.get_at((int(self.center[0]), int(self.center[1]))) == (255, 0, 0, 255):
             self.finish()
 
         self.radars.clear()
@@ -217,8 +253,8 @@ class Car:
         normalized_time = 1 - (self.time / MAX_TIME)
 
 
-        weight_distance = 0.5
-        weight_time = 0.5
+        weight_distance = 0.3
+        weight_time = 0.7
         # print(self.time, normalized_distance, normalized_time, MAX_TIME)
 
         final_reward = (weight_distance * normalized_distance) + (weight_time * normalized_time)
@@ -238,20 +274,21 @@ def run_simulation(genomes, config):
     nets = []
     cars = []
 
+
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
     for i, g in genomes:
         net = neat.nn.FeedForwardNetwork.create(g, config)
         nets.append(net)
-
+    
         g.fitness = 0
-        cars.append(Car(i, [952, 102]))
+        cars.append(Car(i, [1656, 665]))
 
     clock = pygame.time.Clock()
     generation_font = pygame.font.SysFont("Arial", 30)
     alive_font = pygame.font.SysFont("Arial", 20)
-    game_map = pygame.image.load('./assets/Rute_cabang.png').convert()
+    game_map = pygame.image.load('./assets/Rute_final_tanpa_obstacle.png').convert()
 
     global current_generation
     current_generation += 1
@@ -271,9 +308,9 @@ def run_simulation(genomes, config):
                 choice = second_largest_index(output)
 
             if choice == 0:
-                car.angle -= 17
+                car.angle -= 15
             elif choice == 1:
-                car.angle += 17
+                car.angle += 15
 
         still_alive = 0
         for i, car in enumerate(cars):
@@ -294,6 +331,14 @@ def run_simulation(genomes, config):
         for car in cars:
             if car.is_alive():
                 car.draw(screen)
+            else:
+                save_car_data(car, current_generation)
+                None
+            if car.is_finish:
+                print("finish coiiiiiiiiiiiiiiiii", car.is_finish)  
+            # if car.is_finish:
+            #     save_car_data(car, current_generation)
+
 
         generation_text = "Generation: " + str(current_generation)
         draw_text(screen, generation_font, generation_text, (0, 0, 0), 245, 144)
@@ -320,4 +365,5 @@ if __name__ == "__main__":
     stats = neat.StatisticsReporter()
 
     population.run(run_simulation, 1000)
+
 # -=== End: Main ===-
