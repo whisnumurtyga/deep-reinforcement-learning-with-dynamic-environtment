@@ -307,7 +307,7 @@ def run_simulation(genomes, config):
     clock = pygame.time.Clock()
     generation_font = pygame.font.SysFont("Arial", 30)
     alive_font = pygame.font.SysFont("Arial", 20)
-    game_map = pygame.image.load("D:/ai-car-simulation/ai-car-simulation/assets/lampu.png").convert()
+    game_map = pygame.image.load("./assets/lampu.png").convert()
     
     global current_generation
     current_generation += 1
